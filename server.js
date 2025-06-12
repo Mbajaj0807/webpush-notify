@@ -30,50 +30,56 @@ webpush.setVapidDetails(
 const Subscription = require('./models/subscription');
 
 app.post('/subscribe', async (req, res) => {
-  const newSub = req.body;
+  const subscription = req.body;
+
+  if (!subscription?.endpoint) {
+    return res.status(400).json({ error: 'Invalid subscription object' });
+  }
 
   try {
-    const existing = await Subscription.findOne({ endpoint: newSub.endpoint });
+    await Subscription.updateOne(
+      { endpoint: subscription.endpoint },
+      subscription,
+      { upsert: true }
+    );
 
-    if (!existing) {
-      await Subscription.create(newSub);
-      console.log('Subscription stored in DB.');
-    } else {
-      console.log('Subscription already exists in DB.');
-    }
-
-    res.status(201).json({});
-  } catch (err) {
-    console.error('DB Error:', err);
-    res.status(500).json({ error: 'Database error' });
+    res.status(201).json({ message: 'Subscription saved successfully' });
+  } catch (error) {
+    console.error('Error saving subscription:', error);
+    res.status(500).json({ error: 'Failed to save subscription' });
   }
 });
+
 
 
 app.post('/send-notification', async (req, res) => {
-  const payload = JSON.stringify({
-    title: 'Stock Alert',
-    body: 'Your item is out of stock!'
-  });
+  const { title, body } = req.body;
+
+  if (!title || !body) {
+    return res.status(400).json({ error: 'Title and body are required.' });
+  }
+
+  const payload = JSON.stringify({ title, body });
 
   try {
-    const allSubs = await Subscription.find();
+    const subscriptions = await Subscription.find(); // Fetch all subscriptions
 
-    for (const sub of allSubs) {
-      try {
-        await webpush.sendNotification(sub, payload);
-      } catch (err) {
-        console.error('Failed to send notification to', sub.endpoint);
-      }
+    if (subscriptions.length === 0) {
+      return res.status(404).json({ message: 'No subscriptions found.' });
+    }
+
+    for (const sub of subscriptions) {
+      await webpush.sendNotification(sub, payload).catch(err => {
+        console.error('Error sending to a subscription:', err.message);
+      });
     }
 
     res.status(200).json({ message: 'Notifications sent.' });
-  } catch (err) {
-    console.error('DB read error:', err);
-    res.status(500).json({ error: 'Failed to send notifications' });
+  } catch (error) {
+    console.error('Notification error:', error);
+    res.status(500).json({ error: 'Failed to send notifications.', details: error.message });
   }
 });
-
 
 
 
