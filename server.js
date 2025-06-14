@@ -62,7 +62,7 @@ app.post('/send-notification', async (req, res) => {
   const payload = JSON.stringify({ title, body });
 
   try {
-    const subscriptions = await Subscription.find(); // Fetch all subscriptions
+    const subscriptions = await Subscription.find(); 
 
     if (subscriptions.length === 0) {
       return res.status(404).json({ message: 'No subscriptions found.' });
